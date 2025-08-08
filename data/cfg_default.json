@@ -3,5 +3,6 @@
 		"sleep": 0,
 		"endPush": true,
 		"forward": false
-	}
+	},
+	"rePush": false
 }

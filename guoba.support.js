@@ -33,6 +33,11 @@ export function supportGuoba() {
         label: '使用转发推送',
         bottomHelpMessage: '使用合并转发推送消息',
         component: "Switch"
+      }, {
+        field: 'rePush',
+        label: '改标题二次推送',
+        bottomHelpMessage: '当直播间标题被更改时，再次推送一遍',
+        component: "Switch"
       }],
       getConfigData() {
         return Cfg.getAll()

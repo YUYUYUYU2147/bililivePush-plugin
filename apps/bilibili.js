@@ -238,26 +238,32 @@ export default class bilibili extends plugin {
     const msleep = () => {
       return new Promise(resolve => setTimeout(resolve, Cfg.get('user.sleep', 0) * 1000))
     }
+    
+    const rePush = Cfg.get('rePush', false)
 
     for (const {
         group,
         ...roomInfo
-      }
-      of liveData) {
+      } of liveData) {
       roomInfo.live_time *= 1000
       const {
         room_id,
-        live_status
+        live_status,
+        title,
+        area_v2_parent_name,
+        area_v2_name
       } = roomInfo
       const redisKey = `bililive_${room_id}`
       const data = await redis.get(redisKey)
+      const key = `${title}-${area_v2_parent_name}-${area_v2_name}`
 
-      if (live_status === 1 && !data) {
+      if (live_status === 1 && (!data || (rePush && key !== data.key))) {
         const {
           live_time
         } = roomInfo
         redis.set(redisKey, JSON.stringify({
-          live_time
+          live_time,
+          key
         }))
 
         for (const [groupId, userIds] of Object.entries(group)) {
