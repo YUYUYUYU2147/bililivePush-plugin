@@ -29,7 +29,7 @@ class BApi {
     }
   }
 
-  async getRoomInfobyUid(uid) {
+  async getRoomInfobyUidOld(uid) {
     const response = await fetch(`https://api.live.bilibili.com/live_user/v1/Master/info?uid=${uid}`, {
       headers: {},
     })
@@ -54,7 +54,7 @@ class BApi {
     }
   }
   
-  async getRoomInfobyUidNew(uid) {
+  async getRoomInfobyUid(uid) {
     return (await this.getRoomInfobyUids([uid]))?.[uid]
   }
   
