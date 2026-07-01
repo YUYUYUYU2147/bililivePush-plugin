@@ -3,6 +3,39 @@ import moment from 'moment'
 import common from '../../../lib/common/common.js'
 import Cfg from '../model/Cfg.js'
 
+function pickGroup(groupId) {
+  return Bot.pickGroup(Number(groupId))
+}
+
+function canAtAll(groupId) {
+  try {
+    const group = pickGroup(groupId)
+    return !!(group?.is_admin || group?.is_owner)
+  } catch (err) {
+    logger?.warn?.(`[bililivePush] 获取群 ${groupId} Bot权限失败：${err.message}`)
+    return false
+  }
+}
+
+function buildMentions(groupId, userIds = []) {
+  const allowAtAll = canAtAll(groupId)
+  const hasAll = userIds.some(item => Number(item) === 0)
+  const mentions = userIds
+    .filter(item => item != 99999)
+    .filter(item => Number(item) !== 0 || allowAtAll)
+    .map(item => segment.at(Number(item) === 0 ? 'all' : item))
+  return { mentions, skipAll: hasAll && !allowAtAll }
+}
+
+async function safeSendGroupMsg(groupId, message, label = '直播推送') {
+  try {
+    return await pickGroup(groupId).sendMsg(message)
+  } catch (err) {
+    logger?.error?.(`[bililivePush] ${label}发送到群 ${groupId} 失败：${err.message}`)
+    return false
+  }
+}
+
 export default class bilibili extends plugin {
   constructor(e) {
     super({
@@ -205,7 +238,7 @@ export default class bilibili extends plugin {
         area_v2_parent_name,
         area_v2_name
       } = roomInfo
-      const userMentions = userIds.filter(item => item != 99999).map(item => segment.at(item == 0 ? 'all' : item))
+      const { mentions: userMentions, skipAll } = buildMentions(groupId, userIds)
       const message = [
         ...userMentions,
         segment.image(cover_from_user),
@@ -217,10 +250,11 @@ export default class bilibili extends plugin {
         `开播时间: ${moment(live_time).format('YYYY-MM-DD HH:mm:ss')}\n`,
         `直播间地址: https://live.bilibili.com/${room_id}`
       ]
+      if (skipAll) message.unshift('（Bot不是群管理员，已跳过@全体）\n')
       if (Cfg.get('user.forward', false)) {
-        Bot.pickGroup(Number(groupId)).sendMsg(await common.makeForwardMsg(e, [message]))
-        Bot.pickGroup(Number(groupId)).sendMsg(userMentions)
-      } else Bot.pickGroup(Number(groupId)).sendMsg(message)
+        await safeSendGroupMsg(groupId, await common.makeForwardMsg(e, [message]), '开播合并转发')
+        if (userMentions.length) await safeSendGroupMsg(groupId, userMentions, '开播艾特提醒')
+      } else await safeSendGroupMsg(groupId, message, '开播提醒')
     }
 
     const sendLiveEndMessage = async (groupId, roomInfo, liveDuration) => {
@@ -232,7 +266,7 @@ export default class bilibili extends plugin {
         '主播下播la~~~~\n',
         `本次直播时长: ${liveDuration}`
       ]
-      Bot.pickGroup(Number(groupId)).sendMsg(message)
+      await safeSendGroupMsg(groupId, message, '下播提醒')
     }
 
     const msleep = () => {
@@ -267,7 +301,7 @@ export default class bilibili extends plugin {
         }))
 
         for (const [groupId, userIds] of Object.entries(group)) {
-          sendLiveStartMessage(groupId, userIds, roomInfo, e)
+          await sendLiveStartMessage(groupId, userIds, roomInfo, e)
           await msleep()
         }
       } else if (live_status != 1 && data) {
@@ -279,7 +313,7 @@ export default class bilibili extends plugin {
         } = JSON.parse(data)
         const liveDuration = this.getDealTime(moment(live_time), moment())
         for (const [groupId] of Object.entries(group)) {
-          sendLiveEndMessage(groupId, roomInfo, liveDuration)
+          await sendLiveEndMessage(groupId, roomInfo, liveDuration)
           await msleep()
         }
       }
